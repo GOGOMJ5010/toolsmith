@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toolsmith — make the button that isn't there</title>
+<meta name="description" content="A website hands an AI agent a fixed set of buttons. Toolsmith lets the agent build one that is missing — and lets you decide whether it keeps it.">
+<script>window.__TOOLSMITH_NATIVE__ = ('modelContext' in document);</script>
+<script src="vendor/webmcp-global.iife.js"></script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Ctext y=%2226%22 font-size=%2226%22%3E&#9878;%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true">⚒</span>
+    <div>
+      <h1>Toolsmith</h1>
+      <p>Make the button that isn&#8217;t there.</p>
+    </div>
+  </div>
+  <div class="status">
+    <span id="rt-pill" class="pill pill-wait">checking WebMCP…</span>
+    <span id="count-pill" class="pill pill-quiet"><b id="live-count">0</b> buttons the agent can press</span>
+    <label class="auto"><input type="checkbox" id="auto-approve"> auto-approve</label>
+  </div>
+</header>
+
+<main class="grid">
+
+  <!-- ── WORKBENCH ─────────────────────────────── -->
+  <section class="pane" id="pane-bench">
+    <div class="pane-head">
+      <h2>1 · Your data</h2>
+      <span class="hint">what the buttons work on</span>
+    </div>
+    <div class="pane-body">
+      <div class="row-actions">
+        <button class="btn btn-ghost" id="btn-sample">Load sample</button>
+        <button class="btn btn-ghost" id="btn-clear-bench">Clear</button>
+      </div>
+      <textarea id="bench-input" spellcheck="false" placeholder="Paste CSV or a JSON array of objects…"></textarea>
+      <button class="btn btn-primary" id="btn-load">Load into workbench</button>
+      <div id="bench-summary" class="summary muted">Workbench is empty.</div>
+      <div class="table-wrap"><table id="bench-table"></table></div>
+    </div>
+  </section>
+
+  <!-- ── FORGE ─────────────────────────────────── -->
+  <section class="pane" id="pane-forge">
+    <div class="pane-head">
+      <h2>2 · Buttons</h2>
+      <span class="hint">built at runtime, waiting on you</span>
+    </div>
+    <div class="pane-body">
+      <div id="forge-empty" class="empty">
+        <p class="empty-title">No buttons yet.</p>
+        <p>Open this page in an agent browser and say something like:</p>
+        <blockquote id="prompt-sample">You don't have a button for this. Look at my data, then build one
+that returns every row due within N days, soonest first.</blockquote>
+        <button class="btn btn-ghost" id="btn-copy-prompt">Copy prompt</button>
+        <p class="fineprint">No agent handy? <button class="linkish" id="btn-demo-forge">Build one by hand</button> to see the flow.</p>
+      </div>
+      <div id="forge-list"></div>
+    </div>
+  </section>
+
+  <!-- ── LEDGER ────────────────────────────────── -->
+  <section class="pane" id="pane-log">
+    <div class="pane-head">
+      <h2>3 · Activity</h2>
+      <span class="hint">every agent call, in the open</span>
+    </div>
+    <div class="pane-body">
+      <div class="row-actions">
+        <button class="btn btn-ghost" id="btn-export">Export buttons</button>
+        <button class="btn btn-ghost" id="btn-import">Import</button>
+        <input type="file" id="file-import" accept="application/json" hidden>
+        <button class="btn btn-ghost" id="btn-clear-log">Clear log</button>
+      </div>
+      <div id="log-list" class="log"><p class="muted">Nothing called yet.</p></div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <p><b>An agent can only press the buttons it is given.</b> A WebMCP site hands an agent a fixed set of them,
+  decided by whoever built the site. When the one you need is not there, the agent guesses, scrapes, or hands you a
+  snippet to run yourself. Adding a real one today means writing an MCP server, hosting it, editing a config file and
+  restarting the client &mdash; for a function you might use once. Toolsmith moves that from days to seconds without
+  moving it out of your sight.</p>
+  <p><b>A button you did not read is not a button you granted.</b> So nothing is registered until you approve it; the
+  code stays open on screen and editable, with a <b>Test run</b> that executes against your real data before the button
+  exists. Every call runs in a fresh Web Worker with <code>fetch</code>, <code>XMLHttpRequest</code>,
+  <code>WebSocket</code> and storage deleted from the global scope first, on a three-second leash. Editing a granted
+  button takes it back for re-approval. Reloading returns every button to pending. Every call is logged.</p>
+  <p><b>How it works.</b> The interface says <i>button</i> because that is what it is to a person; the WebMCP spec calls
+  it a <i>tool</i>. Toolsmith registers five permanent tools on <code>document.modelContext</code>. One of them,
+  <code>forge_tool</code>, takes a name, a JSON Schema and a JavaScript body and turns them into a real tool the same
+  agent can call seconds later &mdash; registered with its own <code>AbortSignal</code>, so taking it back is one
+  <code>abort()</code>.</p>
+  <p class="muted">Built for the OpenAI WebMCP Challenge &middot; MIT licensed &middot; <a id="repo-link" href="#">source</a></p>
+</footer>
+
+<template id="tpl-tool">
+  <article class="tool" data-id="">
+    <div class="tool-head">
+      <div>
+        <span class="badge badge-status"></span>
+        <span class="badge badge-author"></span>
+        <h3 class="tool-name"></h3>
+      </div>
+      <div class="tool-meta"><span class="calls">0 calls</span></div>
+    </div>
+    <p class="tool-desc"></p>
+    <details class="tool-src">
+      <summary>what this button does — read it before you grant it</summary>
+      <label>inputSchema</label>
+      <textarea class="src-schema" spellcheck="false" rows="6"></textarea>
+      <label>function body <span class="muted">(input, data, helpers) =&gt; …</span></label>
+      <textarea class="src-code" spellcheck="false" rows="10"></textarea>
+    </details>
+    <div class="tool-actions">
+      <button class="btn btn-primary act-approve">Grant it</button>
+      <button class="btn btn-ghost act-save">Save changes</button>
+      <button class="btn btn-ghost act-test">Test run</button>
+      <button class="btn btn-danger act-retire">Take it back</button>
+    </div>
+    <pre class="tool-out" hidden></pre>
+  </article>
+</template>
+
+<script src="js/app.js"></script>
+</body>
+</html>
